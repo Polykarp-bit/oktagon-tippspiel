@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0f">
+<title>Oktagon Tippspiel offline</title>
+<link rel="manifest" href="offline.webmanifest">
+<link rel="apple-touch-icon" href="icons/offline-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Oktagon Tipps">
+<meta name="format-detection" content="telephone=no">
+<style>
+  :root {
+    --bg: #0d0d0f; --card: #18181c; --card2: #222228; --line: #2e2e36;
+    --text: #f2f2f4; --muted: #9a9aa6; --gold: #f5c400; --gold-text: #141414;
+    --plus: #34c472; --minus: #ff5a5a; --blue: #5aa9ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+  button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  body { padding: 0 16px calc(90px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+  header { padding: calc(18px + env(safe-area-inset-top)) 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: .5px; text-transform: uppercase; }
+  h1 span { color: var(--gold); }
+  h2 { font-size: 17px; margin: 22px 0 10px; }
+  .me { color: var(--muted); font-size: 13px; text-align: right; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 12px 0; }
+  .meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  .chip { font-size: 12px; padding: 3px 9px; border-radius: 99px; white-space: nowrap; background: var(--card2); }
+  .chip.open { color: var(--plus); } .chip.locked { color: var(--gold); } .chip.done { color: var(--blue); }
+  .vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+  .vs .x { align-self: center; color: var(--muted); font-size: 13px; font-weight: 700; }
+  .pick { border: 2px solid var(--line); background: var(--card2); color: var(--text); border-radius: 12px;
+    padding: 14px 8px; font: inherit; font-weight: 650; text-align: center; min-height: 64px; cursor: pointer; word-break: break-word; }
+  .pick:disabled { cursor: default; }
+  .pick.sel { border-color: var(--gold); background: var(--gold); color: var(--gold-text); }
+  .pick.win { box-shadow: 0 0 0 3px var(--plus) inset; }
+  .pick.dim { opacity: .45; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 14px; }
+  .sides div { background: var(--card2); border-radius: 10px; padding: 8px 10px; min-height: 36px; }
+  .sides .n { display: flex; justify-content: space-between; gap: 6px; }
+  .plus { color: var(--plus); } .minus { color: var(--minus); } .zero { color: var(--muted); }
+  .admin { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  button.b { border-radius: 10px; padding: 10px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    background: var(--card2); color: var(--text); border: 1px solid var(--line); }
+  button.b.gold { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
+  button.b.red { color: var(--minus); }
+  button.b.full { width: 100%; padding: 14px; font-size: 16px; }
+  a.l { color: var(--muted); }
+  input { width: 100%; font: inherit; padding: 13px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card2); color: var(--text); margin: 6px 0 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 11px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.big { font-weight: 700; font-size: 17px; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: #111114ee; backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line); display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+  nav button { flex: 1; max-width: 160px; background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; padding: 12px 4px 14px; cursor: pointer; }
+  nav button b { display: block; font-size: 20px; line-height: 1.1; }
+  nav button.on { color: var(--gold); }
+  .toast { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 608px; margin: 0 auto;
+    background: var(--minus); color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 600; z-index: 30; }
+  .toast.ok { background: var(--plus); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .row input { margin: 0 0 6px; padding: 10px 8px; }
+  .inline { display: flex; gap: 6px; } .inline input { margin: 0; }
+  small { color: var(--muted); }
+  ul.rules { padding-left: 18px; color: var(--muted); font-size: 14px; } ul.rules li { margin: 4px 0; }
+  .plist { display: flex; flex-direction: column; gap: 8px; }
+  .prow { display: flex; align-items: center; gap: 8px; background: var(--card2); border-radius: 12px; padding: 10px 12px; }
+  .prow .nm { flex: 1; font-weight: 650; }
+  /* Vollbild für die Tippabgabe: verdeckt alles andere */
+  #overlay { position: fixed; inset: 0; background: var(--bg); z-index: 20; overflow-y: auto; }
+  #overlay .in { max-width: 640px; margin: 0 auto; padding: calc(18px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .cover { min-height: 80vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 14px; }
+  .cover .who { font-size: 34px; font-weight: 800; color: var(--gold); word-break: break-word; }
+  .cover .icon { font-size: 56px; }
+  .step { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Oktagon <span>Tippspiel</span></h1>
+  <div class="me">📴 Offline-Modus<br>ein Handy für alle</div>
+</header>
+<main id="view"></main>
+<nav id="nav"></nav>
+<div id="overlay" hidden><div class="in" id="ov"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+const STAKE = 10;
+const KEY = "okt_offline_v1";
+const CARD = [ // Fight Card OKTAGON 96, 31.10.2026, SAP Garden München (wie in der Online-Version)
+  ["Madureira", "Schordje", "Federgewicht"],
+  ["Ayari", "Surdu", ""],
+  ["Bartl", "Manning", ""],
+  ["Lazar Todev", "Simon Biyong", "Schwergewicht"],
+  ["Gökhan Aksu", "Niko Samsonidse", ""],
+  ["Ronald Paradeiser", "Tyrone Pfeifer", "Co-Main Event"],
+  ["Amiran Gogoladze", "Felix Klinkhammer", "Main Event · Weltergewicht-Titel"],
+];
+const freshGame = () => ({
+  players: [],
+  fights: CARD.map(([a, b, info], i) => ({ id: i + 1, a, b, info, status: "open", result: null, bets: {} })),
+  nextId: CARD.length + 1,
+});
+
+let game;
+try { game = JSON.parse(localStorage.getItem(KEY)) || freshGame(); } catch { game = freshGame(); }
+let tab = "fights";
+try { tab = localStorage.getItem(KEY + "_tab") || "fights"; } catch {}
+let flow = null; // laufende Tippabgabe: { queue: [Namen], i, stage: "cover" | "pick" | "end" }
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(game)); } catch { toast("Speichern im Browser nicht möglich"); } }
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const js = (s) => esc(JSON.stringify(s)); // Name sicher in onclick="..." einsetzen
+const euro = (n) => {
+  n = Number(n) || 0;
+  const s = Math.abs(n).toLocaleString("de-DE", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
+  return n > 0 ? "+" + s : n < 0 ? "−" + s : "±0 €";
+};
+const cls = (n) => (n > 0 ? "plus" : n < 0 ? "minus" : "zero");
+const fight = (id) => game.fights.find((f) => f.id === id);
+const openFights = () => game.fights.filter((f) => f.status === "open");
+
+function toast(msg, good) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = "toast" + (good ? " ok" : ""); t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 3000);
+}
+
+// ---------- Abrechnung ----------
+// Verlierer-Einsätze werden auf die Gewinner aufgeteilt. Unentschieden/NC, alle richtig oder alle falsch => 0 für alle.
+function payouts(f) {
+  const out = {};
+  if (f.status !== "done") return out;
+  const names = Object.keys(f.bets);
+  const w = names.filter((n) => f.bets[n] === f.result).length, l = names.length - w;
+  for (const n of names) {
+    out[n] = f.result === "draw" || w === 0 || l === 0 ? 0 : f.bets[n] === f.result ? Math.round((STAKE * l / w) * 100) / 100 : -STAKE;
+  }
+  return out;
+}
+function board() {
+  const rows = game.players.map((name) => ({ name, net: 0, won: 0, lost: 0 }));
+  const by = Object.fromEntries(rows.map((r) => [r.name, r]));
+  for (const f of game.fights) {
+    const p = payouts(f);
+    for (const n in p) {
+      if (!by[n]) continue;
+      by[n].net = Math.round((by[n].net + p[n]) * 100) / 100;
+      if (f.result !== "draw") f.bets[n] === f.result ? by[n].won++ : by[n].lost++;
+    }
+  }
+  return rows.sort((x, y) => y.net - x.net || x.name.localeCompare(y.name));
+}
+// Ausgleich mit möglichst wenig Überweisungen: gleiche Beträge direkt paaren, sonst größter Schuldner an größten Gläubiger
+function settlements(b) {
+  const debt = b.filter((p) => p.net < 0).map((p) => ({ name: p.name, c: Math.round(-p.net * 100) }));
+  const cred = b.filter((p) => p.net > 0).map((p) => ({ name: p.name, c: Math.round(p.net * 100) }));
+  const out = [];
+  for (const d of debt) {
+    const m = cred.find((k) => k.c === d.c);
+    if (m) { out.push({ from: d.name, to: m.name, c: d.c }); d.c = 0; m.c = 0; }
+  }
+  for (;;) {
+    const d = debt.filter((x) => x.c > 0).sort((x, y) => y.c - x.c)[0];
+    const k = cred.filter((x) => x.c > 0).sort((x, y) => y.c - x.c)[0];
+    if (!d || !k) break;
+    const c = Math.min(d.c, k.c);
+    out.push({ from: d.name, to: k.name, c }); d.c -= c; k.c -= c;
+  }
+  return out.filter((t) => t.c > 0);
+}
+
+// ---------- Ansichten ----------
+function render() {
+  const tabs = [["fights", "🥊", "Kämpfe"], ["players", "👥", "Spieler"], ["board", "🏆", "Tabelle"]];
+  $("#nav").innerHTML = tabs.map(([k, i, l]) => `<button class="${k === tab ? "on" : ""}" onclick="go('${k}')"><b>${i}</b>${l}</button>`).join("");
+  $("#view").innerHTML = { fights: fightsView, players: playersView, board: boardView }[tab]();
+  renderFlow();
+}
+const standalone = () => navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+function go(t) { tab = t; try { localStorage.setItem(KEY + "_tab", t); } catch {} render(); window.scrollTo(0, 0); }
+
+function fightsView() {
+  const n = game.players.length;
+  let top;
+  if (!n) top = `<div class="card"><b>Erst Spieler eintragen</b><p class="hint">Unter „Spieler“ alle Namen eintragen, die mitwetten. Danach reicht ihr das Handy rum und jeder tippt verdeckt.</p>
+    <button class="b gold full" onclick="go('players')">👥 Spieler eintragen</button></div>`;
+  else if (openFights().length) top = `<button class="b gold full" style="margin-top:6px" onclick="startRound()">📱 Tipprunde starten (Handy rumgeben)</button>
+    <p class="hint">Jeder ist nacheinander dran und sieht nur seine eigenen Tipps. Pro Kampf ${STAKE} € Einsatz. Tipps sind änderbar, bis der Kampf gesperrt wird.</p>`;
+  else top = `<p class="hint">Alle Kämpfe sind gesperrt.</p>`;
+  return top + [...game.fights].reverse().map(fightCard).join("") + addFightHtml();
+}
+
+function fightCard(f) {
+  const chip = { open: `<span class="chip open">● Tipps offen</span>`, locked: `<span class="chip locked">🔒 Kampf läuft</span>`, done: `<span class="chip done">Beendet</span>` }[f.status];
+  const btn = (side, name) => {
+    const c = ["pick"];
+    if (f.status === "done") { if (f.result === side) c.push("win"); else if (f.result !== "draw") c.push("dim"); }
+    return `<button class="${c.join(" ")}" disabled>${esc(name)}${f.status === "done" && f.result === side ? "<br><small style='color:inherit'>🏆 Sieger</small>" : ""}</button>`;
+  };
+  const tipped = Object.keys(f.bets);
+  let foot = "", act = "";
+  if (f.status === "open") {
+    const missing = game.players.filter((p) => !(p in f.bets));
+    foot = `<div class="hint">${tipped.length} ${tipped.length === 1 ? "Tipp" : "Tipps"} abgegeben${missing.length && game.players.length ? ` · Fehlt noch: ${missing.map(esc).join(", ")}` : game.players.length ? " · ✅ alle haben getippt" : ""}.
+      ${!tipped.length ? ` <a href="#" class="l" onclick="delFight(${f.id});return false">Kampf entfernen</a>` : ""}</div>`;
+    act = `<div class="admin"><button class="b gold" onclick="lockFight(${f.id})">🔔 Kampf beginnt – Tipps sperren</button></div>`;
+  } else if (f.status === "locked") {
+    const short = (s) => esc(s.split(" ").pop());
+    foot = `<div class="hint">${tipped.length} ${tipped.length === 1 ? "Tipp" : "Tipps"} gesperrt · Wer was getippt hat, wird nach dem Kampf aufgedeckt.</div>`;
+    act = `<div class="admin" style="display:block"><div class="hint" style="margin:0 0 8px"><b style="color:var(--text)">Kampf vorbei? Sieger eintragen:</b></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px"><button class="b" onclick="setResult(${f.id},'A')">🏆 ${short(f.a)}</button><button class="b" onclick="setResult(${f.id},'B')">🏆 ${short(f.b)}</button><button class="b" onclick="setResult(${f.id},'draw')">Unentsch./NC</button></div>
+      <div class="hint"><a href="#" class="l" onclick="unlockFight(${f.id});return false">Zu früh gesperrt? Wieder öffnen</a></div></div>`;
+  } else {
+    const p = payouts(f);
+    const side = (s) => tipped.filter((n) => f.bets[n] === s)
+      .map((n) => `<div class="n"><span>${esc(n)}</span><span class="${cls(p[n])}">${euro(p[n])}</span></div>`).join("") || `<small>niemand</small>`;
+    let line = "";
+    if (f.result === "draw") line = "Unentschieden / No Contest: alle bekommen ihren Einsatz zurück.";
+    else if (tipped.length && (tipped.every((n) => f.bets[n] === f.result) || tipped.every((n) => f.bets[n] !== f.result)))
+      line = `Alle haben ${tipped.every((n) => f.bets[n] === f.result) ? "richtig" : "falsch"} getippt, darum bekommt jeder seinen Einsatz zurück.`;
+    foot = `<div class="sides"><div>${side("A")}</div><div>${side("B")}</div></div>${line ? `<div class="hint">${line}</div>` : ""}
+      <div class="hint"><a href="#" class="l" onclick="undoResult(${f.id});return false">Ergebnis falsch eingetragen? Korrigieren</a></div>`;
+  }
+  return `<div class="card"><div class="meta"><span>${esc(f.info || "Kampf " + f.id)}</span>${chip}</div>
+    <div class="vs">${btn("A", f.a)}<span class="x">VS</span>${btn("B", f.b)}</div>${foot}${act}</div>`;
+}
+
+function lockFight(id) {
+  const f = fight(id);
+  const missing = game.players.filter((p) => !(p in f.bets));
+  if (!confirm(`${f.a} vs. ${f.b} beginnt? Danach kann niemand mehr tippen oder ändern.${missing.length ? `\n\nOhne Tipp: ${missing.join(", ")}` : ""}`)) return;
+  f.status = "locked"; save(); render();
+}
+function unlockFight(id) {
+  if (!confirm("Kampf wieder öffnen? Dann können alle ihre Tipps wieder ändern.")) return;
+  fight(id).status = "open"; save(); render();
+}
+function setResult(id, r) {
+  const f = fight(id);
+  const label = r === "A" ? f.a + " gewinnt" : r === "B" ? f.b + " gewinnt" : "Unentschieden / No Contest";
+  if (!confirm(`Ergebnis: ${label}?\n\nDanach werden alle Tipps aufgedeckt.`)) return;
+  f.status = "done"; f.result = r; save(); render();
+}
+function undoResult(id) {
+  if (!confirm("Ergebnis zurücksetzen? Der Kampf ist dann wieder gesperrt und ihr könnt den Sieger neu eintragen.")) return;
+  const f = fight(id); f.status = "locked"; f.result = null; save(); render();
+}
+
+let addOpen = false;
+function addFightHtml() {
+  return `<details class="card" ${addOpen ? "open" : ""} ontoggle="addOpen=this.open"><summary style="cursor:pointer;font-weight:600">Kampf fehlt? Hinzufügen</summary>
+    <form class="row" style="margin-top:12px" onsubmit="addFight(event)">
+      <input name="a" placeholder="Kämpfer A" required><input name="b" placeholder="Kämpfer B" required>
+      <input name="info" placeholder="Info (optional)"><button class="b gold">Hinzufügen</button>
+    </form><div class="hint">Neue Kämpfe kommen ans Ende der Liste (ganz oben angezeigt). Ein Kampf ohne Tipps lässt sich wieder entfernen.</div></details>`;
+}
+function addFight(ev) {
+  ev.preventDefault();
+  const d = new FormData(ev.target);
+  const a = d.get("a").trim(), b = d.get("b").trim();
+  if (a.length < 2 || b.length < 2) return toast("Bitte beide Kämpfer eintragen");
+  game.fights.push({ id: game.nextId++, a, b, info: d.get("info").trim(), status: "open", result: null, bets: {} });
+  addOpen = false; save(); render(); toast("Kampf hinzugefügt", true);
+}
+function delFight(id) {
+  if (!confirm("Kampf entfernen?")) return;
+  game.fights = game.fights.filter((f) => f.id !== id); save(); render();
+}
+
+function playersView() {
+  const open = openFights();
+  const rows = game.players.map((n) => {
+    const done = open.filter((f) => n in f.bets).length;
+    return `<div class="prow"><span class="nm">${esc(n)}</span>
+      ${open.length ? `<small>${done}/${open.length} getippt</small><button class="b" onclick="startRound([${js(n)}])">Tippen</button>` : ""}
+      <a href="#" class="l" title="entfernen" onclick="removePlayer(${js(n)});return false">✕</a></div>`;
+  }).join("");
+  return `<h2>Spieler <small>(${game.players.length})</small></h2>
+    <form class="inline" onsubmit="addPlayer(event)"><input name="name" placeholder="Name" maxlength="20" autocomplete="off" required><button class="b gold">Hinzufügen</button></form>
+    <div class="plist" style="margin-top:12px">${rows || `<p class="hint">Noch niemand eingetragen.</p>`}</div>
+    ${game.players.length && open.length ? `<button class="b gold full" style="margin-top:14px" onclick="startRound()">📱 Tipprunde starten (alle nacheinander)</button>` : ""}
+    <p class="hint">Mit „Tippen“ kann jemand einzeln nachtippen oder seinen Tipp ändern, solange der Kampf offen ist.</p>
+    <h2>Neuer Abend</h2>
+    <div class="card"><p class="hint" style="margin-top:0">Alles auf diesem Handy löschen und mit der Fight Card von OKTAGON 96 neu starten.</p>
+      <label style="font-size:14px;color:var(--muted)"><input type="checkbox" id="keep" checked style="width:auto;margin:0 6px 0 0">Spieler behalten</label>
+      <div style="margin-top:10px"><button class="b red" onclick="resetAll()">Alles zurücksetzen</button></div></div>
+    <div class="card" id="install" hidden><b>📲 Als App aufs iPhone</b><ol class="rules" style="padding-left:20px">
+      <li>Diese Seite in <b>Safari</b> öffnen.</li><li>Unten auf <b>Teilen</b> (Quadrat mit Pfeil nach oben) tippen.</li>
+      <li><b>Zum Home-Bildschirm</b> wählen, dann <b>Hinzufügen</b>.</li><li>Ab dann über das Symbol starten, das klappt auch ohne Internet.</li></ol></div>
+    <p class="hint">Alle Daten liegen nur auf diesem Handy (im Browser). Nicht im privaten Modus öffnen, sonst ist nach dem Schließen alles weg. Die Online-Version für mehrere Handys: <a class="l" href="./">hier</a>.</p>`;
+}
+function addPlayer(ev) {
+  ev.preventDefault();
+  const name = new FormData(ev.target).get("name").trim().replace(/\s+/g, " ");
+  if (!name) return;
+  if (game.players.some((p) => p.toLowerCase() === name.toLowerCase())) return toast("Den Namen gibt es schon");
+  game.players.push(name); save(); render();
+  $("input[name=name]").focus();
+}
+function removePlayer(name) {
+  const n = game.fights.filter((f) => name in f.bets).length;
+  if (!confirm(n ? `${name} entfernen? Damit werden auch ${n} Tipp(s) von ${name} gelöscht und die Abrechnung ändert sich.` : `${name} entfernen?`)) return;
+  game.players = game.players.filter((p) => p !== name);
+  game.fights.forEach((f) => delete f.bets[name]);
+  save(); render();
+}
+function resetAll() {
+  if (!confirm("Wirklich alles zurücksetzen? Alle Tipps und Ergebnisse sind dann weg.")) return;
+  const keep = $("#keep").checked ? game.players : [];
+  game = freshGame(); game.players = keep; save(); go("fights");
+}
+
+function boardView() {
+  const b = board();
+  const done = game.fights.filter((f) => f.status === "done").length;
+  const rows = b.map((p, i) => `<tr><td>${i + 1}.</td><td>${esc(p.name)}</td>
+    <td class="num"><small>${p.won}✓ ${p.lost}✗</small></td><td class="num big ${cls(p.net)}">${euro(p.net)}</td></tr>`).join("");
+  return `<h2>Tabelle <small>(${done} von ${game.fights.length} Kämpfen entschieden)</small></h2>
+    ${b.length ? `<div class="card" style="padding:4px 12px"><table><tr><th></th><th>Name</th><th class="num">Tipps</th><th class="num">Bilanz</th></tr>${rows}</table></div>` : `<p class="hint">Noch keine Spieler.</p>`}
+    ${settleHtml(b)}${rulesHtml()}`;
+}
+function settleHtml(b) {
+  const t = settlements(b);
+  const open = game.fights.some((f) => f.status !== "done");
+  if (!t.length) return `<p class="hint">Noch nichts zu überweisen.</p>`;
+  const amt = (c) => (c / 100).toLocaleString("de-DE", { minimumFractionDigits: c % 100 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
+  return `<h2>Wer zahlt an wen ${open ? "<small>(Zwischenstand)</small>" : ""}</h2>
+    <div class="card" style="padding:4px 12px"><table>${t.map((x) => `<tr><td>${esc(x.from)}</td><td style="color:var(--muted)">→</td><td>${esc(x.to)}</td><td class="num big">${amt(x.c)}</td></tr>`).join("")}</table></div>
+    <p class="hint">${t.length} ${t.length === 1 ? "Überweisung" : "Überweisungen"} reichen, damit alle quitt sind.${open ? " Ändert sich noch, solange Kämpfe offen sind." : ""}</p>`;
+}
+function rulesHtml() {
+  return `<div class="card"><b>So funktioniert's</b><ul class="rules">
+    <li>Alle tippen auf diesem einen Handy. Bei der Tipprunde gebt ihr das Handy reihum weiter, jeder sieht nur seine eigenen Tipps.</li>
+    <li>Pro Kampf tippst du auf einen Sieger, Einsatz ${STAKE} €. Du musst nicht jeden Kampf tippen.</li>
+    <li>Bis zum Kampfbeginn kann jeder seinen Tipp ändern. Wenn der Kampf losgeht, drückt einer „Kampf beginnt“. Ab dann sind alle Tipps fix.</li>
+    <li>Nach dem Kampf trägt einer den Sieger ein. Dann werden alle Tipps aufgedeckt.</li>
+    <li>Die Einsätze der Verlierer werden gleichmäßig unter den Gewinnern aufgeteilt.</li>
+    <li>Haben alle richtig oder alle falsch getippt, oder endet der Kampf unentschieden / No Contest, gibt es für niemanden Plus oder Minus.</li>
+    <li>Am Ende zeigt die Tabelle, wer im Plus und wer im Minus ist, und wer wem wie viel zahlt.</li></ul></div>`;
+}
+
+// ---------- Tipprunde: Handy reihum ----------
+function startRound(names) {
+  if (!game.players.length) return go("players");
+  if (!openFights().length) return toast("Keine offenen Kämpfe mehr");
+  flow = { queue: names || [...game.players], i: 0, stage: "cover" };
+  render();
+}
+function renderFlow() {
+  const ov = $("#overlay");
+  if (!flow) { ov.hidden = true; document.body.style.overflow = ""; return; }
+  ov.hidden = false; document.body.style.overflow = "hidden";
+  const name = flow.queue[flow.i], many = flow.queue.length > 1;
+  const step = many ? `<div class="step">${flow.i + 1} von ${flow.queue.length}</div>` : "";
+  let html;
+  if (flow.stage === "cover") {
+    html = `<div class="cover"><div class="icon">📱</div>${step}<div>Handy geben an</div><div class="who">${esc(name)}</div>
+      <p class="hint">Nur ${esc(name)} schaut jetzt aufs Display.</p>
+      <button class="b gold full" onclick="flowStage('pick')">Ich bin ${esc(name)} – meine Tipps</button>
+      ${many ? `<button class="b" onclick="flowNext()">${esc(name)} überspringen</button>` : ""}
+      <a href="#" class="l" onclick="flowEnd();return false">Tipprunde abbrechen</a></div>`;
+  } else if (flow.stage === "pick") {
+    const open = [...openFights()].reverse();
+    html = `${step}<h2 style="margin-top:6px">Tipps von <span style="color:var(--gold)">${esc(name)}</span></h2>
+      <p class="hint">Tippe auf den Sieger. Nochmal tippen nimmt den Tipp zurück. Pro Kampf ${STAKE} €.</p>
+      ${open.map((f) => {
+        const b = (s, n) => `<button class="pick ${f.bets[name] === s ? "sel" : ""}" onclick="flowPick(${f.id},'${s}')">${esc(n)}</button>`;
+        return `<div class="card"><div class="meta"><span>${esc(f.info || "Kampf " + f.id)}</span>${f.bets[name] ? "" : `<span class="chip">kein Tipp</span>`}</div>
+          <div class="vs">${b("A", f.a)}<span class="x">VS</span>${b("B", f.b)}</div></div>`;
+      }).join("") || `<p class="hint">Keine offenen Kämpfe mehr.</p>`}
+      <button class="b gold full" onclick="flowNext()">✓ Fertig – Display verdecken</button>`;
+  } else {
+    const nxt = flow.queue[flow.i + 1];
+    html = `<div class="cover"><div class="icon">🙈</div><div>Tipps von <b>${esc(name)}</b> gespeichert.</div>
+      ${nxt ? `<button class="b gold full" onclick="flowAdvance()">Weiter zu ${esc(nxt)}</button>` : `<button class="b gold full" onclick="flowEnd()">Fertig</button>`}</div>`;
+  }
+  $("#ov").innerHTML = html;
+  ov.scrollTop = 0;
+}
+function flowStage(s) { flow.stage = s; renderFlow(); }
+function flowPick(id, side) {
+  const f = fight(id), name = flow.queue[flow.i];
+  if (f.status !== "open") return;
+  if (f.bets[name] === side) delete f.bets[name]; else f.bets[name] = side;
+  save();
+  const y = $("#overlay").scrollTop; renderFlow(); $("#overlay").scrollTop = y;
+}
+// Nach dem Tippen erst ein neutraler Zwischenbildschirm, damit der Nächste nichts sieht
+function flowNext() {
+  if (flow.stage === "pick") { flow.stage = "saved"; return renderFlow(); }
+  flowAdvance();
+}
+function flowAdvance() {
+  if (flow.i + 1 >= flow.queue.length) return flowEnd();
+  flow.i++; flow.stage = "cover"; renderFlow();
+}
+function flowEnd() { flow = null; render(); }
+
+render();
+
+// Offline nutzbar machen: Seite wird beim ersten Aufruf zwischengespeichert
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("offline-sw.js").catch(() => {});
+</script>
+</body>
+</html>

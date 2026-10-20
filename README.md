@@ -57,3 +57,13 @@ const SUPABASE_KEY = "eyJ...";   // anon- oder publishable-Key
 - Die PIN ist nur ein Schutz unter Freunden. 4 Ziffern lassen sich mit etwas Aufwand durchprobieren. Für einen Abend mit Kumpels reicht das.
 - Kostenlose Supabase-Projekte pausieren nach etwa einer Woche ohne Nutzung. Dann im Supabase-Dashboard einfach auf **Restore** klicken.
 - Für einen neuen Abend: im SQL Editor `delete from votes; delete from bets; delete from fights; delete from players;` ausführen und neue Kämpfe in der App hinzufügen.
+
+## Offline-Version (ein Handy für alle)
+
+`offline.html` (live unter `…/oktagon-tippspiel/offline.html`) läuft ohne Supabase und ohne Internet. Alles wird nur im Browser des Handys gespeichert.
+
+- Unter **Spieler** alle Namen eintragen.
+- **Tipprunde starten:** Das Handy geht reihum. Jeder sieht nur seine eigenen Tipps, danach wird das Display verdeckt.
+- **Kampf beginnt** sperrt die Tipps, danach trägt einer den Sieger ein. Dann werden die Tipps aufgedeckt. Sperre und Ergebnis lassen sich bei Bedarf korrigieren.
+- Gleiche Regeln und Abrechnung wie online, inkl. „Wer zahlt an wen“.
+- **iPhone:** In Safari öffnen, **Teilen → Zum Home-Bildschirm**. Dann startet es wie eine App und funktioniert auch ohne Netz.
