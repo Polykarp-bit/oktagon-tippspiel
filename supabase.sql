@@ -7,7 +7,7 @@
 --  * Jede Aktion (Tipp, Änderung, Sperren, Entsperren, Ergebnis) wird protokolliert.
 --    Das Protokoll eines Kampfes sehen alle, sobald der Kampf entschieden ist.
 --  * Das Ergebnis gilt, sobald mehr als die Hälfte der Tipper dieses
---    Kampfes dasselbe Ergebnis bestätigt hat (Anteil siehe Abschnitt 4).
+--    Kampfes dasselbe Ergebnis bestätigt hat. Abstimmen dürfen nur Tipper (Anteil siehe Abschnitt 4).
 -- =====================================================================
 
 create schema if not exists extensions;
@@ -114,7 +114,8 @@ create or replace function _recount(p_fight int) returns void
 language plpgsql security definer set search_path = public, extensions as $$
 declare v_vote text; v_n int;
 begin
-  select vote, count(*) into v_vote, v_n from votes where fight_id = p_fight
+  select vote, count(*) into v_vote, v_n from votes v where fight_id = p_fight
+     and exists (select 1 from bets b where b.player_id = v.player_id and b.fight_id = p_fight)
    group by vote order by count(*) desc limit 1;
   if v_n is not null and v_n >= _needed(p_fight) then
     update fights set status = 'done', result = v_vote where id = p_fight and status <> 'open';
@@ -172,7 +173,8 @@ language sql security definer set search_path = public, extensions as $$
                     'A', count(*) filter (where vote = 'A'),
                     'B', count(*) filter (where vote = 'B'),
                     'draw', count(*) filter (where vote = 'draw'))
-                    from votes v where v.fight_id = f.id),
+                    from votes v where v.fight_id = f.id
+                     and exists (select 1 from bets b where b.player_id = v.player_id and b.fight_id = f.id)),
         'bets', case when f.status <> 'done' then null else (
           select coalesce(json_agg(json_build_object('name', p.name, 'pick', b.pick, 'net', po.net)
                                    order by b.pick, p.name), '[]')
@@ -184,9 +186,12 @@ language sql security definer set search_path = public, extensions as $$
       select json_agg(x order by x.net desc, x.name) from (
         select p.name,
                coalesce(sum(po.net), 0) as net,
-               count(po.*) filter (where po.net > 0) as won,
-               count(po.*) filter (where po.net < 0) as lost
-          from players p left join _payouts po on po.player_id = p.id
+               count(f.id) filter (where f.result <> 'draw' and b.pick = f.result) as won,
+               count(f.id) filter (where f.result <> 'draw' and b.pick <> f.result) as lost
+          from players p
+          left join bets b on b.player_id = p.id
+          left join fights f on f.id = b.fight_id and f.status = 'done'
+          left join _payouts po on po.player_id = b.player_id and po.fight_id = b.fight_id
          group by p.id, p.name) x), '[]')
   )
 $$;
@@ -281,6 +286,7 @@ begin
 end $$;
 
 -- Ergebnis bestätigen ('A', 'B', 'draw') oder Bestätigung zurückziehen (null). Änderbar.
+-- Nur wer diesen Kampf getippt hat, darf abstimmen.
 create or replace function vote_result(p_name text, p_pin text, p_fight int, p_vote text) returns void
 language plpgsql security definer set search_path = public, extensions as $$
 declare v_player uuid := _player(p_name, p_pin);
@@ -291,6 +297,9 @@ begin
   end if;
   if _undo_left(p_fight) > 0 then
     raise exception 'Ergebnis erst nach Ablauf der Sperr-Frist bestätigen';
+  end if;
+  if p_vote is not null and not exists (select 1 from bets where player_id = v_player and fight_id = p_fight) then
+    raise exception 'Nur wer diesen Kampf getippt hat, kann das Ergebnis bestätigen';
   end if;
   if p_vote is null then
     delete from votes where player_id = v_player and fight_id = p_fight;

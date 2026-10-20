@@ -225,6 +225,8 @@ function fightCard(f) {
     const me = bets.find((b) => b.name === user.name);
     let line = !f.mine ? "Du hast hier nicht getippt." : "";
     if (f.status === "done" && me) line = `Dein Ergebnis: <b class="${cls(me.net)}">${euro(me.net)}</b>`;
+    if (f.status === "done" && bets.length && (bets.every((b) => b.pick === f.result) || bets.every((b) => b.pick !== f.result)))
+      line += ` · Alle haben ${bets.every((b) => b.pick === f.result) ? "richtig" : "falsch"} getippt, darum bekommt jeder seinen Einsatz zurück.`;
     if (f.status === "done" && f.result === "draw") line = "Unentschieden / No Contest: alle bekommen ihren Einsatz zurück.";
     foot = `<div class="sides"><div>${side("A")}</div><div>${side("B")}</div></div>${line ? `<div class="hint">${line}</div>` : ""}`;
   }
@@ -239,10 +241,12 @@ function fightCard(f) {
     const v = f.votes, short = (s) => esc(s.split(" ").pop());
     const opt = (k, label) => `<button class="b ${f.my_vote === k ? "gold" : ""}" onclick="vote(${f.id},'${k}')">${label} <small style="color:inherit">(${v[k]})</small></button>`;
     const lead = Math.max(v.A, v.B, v.draw);
-    act2 = `<div class="admin" style="display:block"><div class="hint" style="margin:0 0 8px">${f.status === "done"
-        ? `Ergebnis bestätigt (${lead} von ${f.needed} nötigen Stimmen). Falsch? Stimme ändern.`
-        : `Wer hat gewonnen? Das Ergebnis gilt ab <b>${f.needed}</b> gleichen Stimmen.${f.locked_by ? ` Gesperrt von ${esc(f.locked_by)}.` : ""}`}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">${opt("A", short(f.a))}${opt("B", short(f.b))}${opt("draw", "Unentsch./NC")}</div></div>`;
+    const head = f.status === "done"
+      ? `Ergebnis bestätigt mit ${lead} ${lead === 1 ? "Stimme" : "Stimmen"} (nötig: ${f.needed}).${f.mine ? " Falsch? Stimme ändern." : ""}`
+      : `Wer hat gewonnen? Das Ergebnis gilt ab <b>${f.needed}</b> gleichen ${f.needed === 1 ? "Stimme" : "Stimmen"} der Tipper.${f.locked_by ? ` Gesperrt von ${esc(f.locked_by)}.` : ""}`;
+    act2 = `<div class="admin" style="display:block"><div class="hint" style="margin:0 0 8px">${head}</div>
+      ${f.mine ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${opt("A", short(f.a))}${opt("B", short(f.b))}${opt("draw", "Unentsch./NC")}</div>`
+               : `<div class="hint" style="margin:0">Abstimmen dürfen nur die, die diesen Kampf getippt haben.</div>`}</div>`;
   }
   return `<div class="card"><div class="meta"><span>${esc(f.info || "Kampf " + f.pos)}</span>${chip}</div>
     <div class="vs">${btn("A", f.a)}<span class="x">VS</span>${btn("B", f.b)}</div>${foot}${act2}${logHtml(f)}</div>`;
@@ -288,7 +292,7 @@ function rulesHtml() {
     <li>Die Sperre ist sofort endgültig. Also erst drücken, wenn der Kampf wirklich losgeht.</li>
     <li>Alles wird protokolliert: wer wann getippt, geändert, gesperrt, entsperrt oder ein Ergebnis bestätigt hat. Das Protokoll sehen alle, sobald der Kampf entschieden ist.</li>
     <li>Was die anderen getippt haben, siehst du erst, wenn der Kampf vorbei und das Ergebnis bestätigt ist.</li>
-    <li>Nach dem Kampf bestätigt ihr den Sieger. Das Ergebnis gilt, sobald mehr als die Hälfte der Tipper dieses Kampfes dasselbe bestätigt hat.</li>
+    <li>Nach dem Kampf bestätigt ihr den Sieger. Abstimmen dürfen nur die, die diesen Kampf getippt haben. Das Ergebnis gilt, sobald mehr als die Hälfte von ihnen dasselbe bestätigt hat.</li>
     <li>Die Einsätze der Verlierer werden gleichmäßig unter den Gewinnern aufgeteilt.</li>
     <li>Haben alle richtig oder alle falsch getippt, oder endet der Kampf unentschieden / No Contest, gibt es für niemanden Plus oder Minus.</li>
     <li>Am Ende zeigt die Tabelle, wer im Plus und wer im Minus ist.</li></ul></div>`;
