@@ -285,8 +285,8 @@ begin
   return false;
 end $$;
 
--- Ergebnis bestätigen ('A', 'B', 'draw') oder Bestätigung zurückziehen (null). Änderbar.
--- Nur wer diesen Kampf getippt hat, darf abstimmen.
+-- Ergebnis bestätigen ('A', 'B', 'draw') oder Bestätigung zurückziehen (null).
+-- Nur wer diesen Kampf getippt hat, darf abstimmen. Steht das Ergebnis fest, ist es endgültig.
 create or replace function vote_result(p_name text, p_pin text, p_fight int, p_vote text) returns void
 language plpgsql security definer set search_path = public, extensions as $$
 declare v_player uuid := _player(p_name, p_pin);
@@ -297,6 +297,9 @@ begin
   end if;
   if _undo_left(p_fight) > 0 then
     raise exception 'Ergebnis erst nach Ablauf der Sperr-Frist bestätigen';
+  end if;
+  if exists (select 1 from fights where id = p_fight and status = 'done') then
+    raise exception 'Das Ergebnis steht bereits fest';
   end if;
   if p_vote is not null and not exists (select 1 from bets where player_id = v_player and fight_id = p_fight) then
     raise exception 'Nur wer diesen Kampf getippt hat, kann das Ergebnis bestätigen';

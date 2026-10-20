@@ -242,11 +242,12 @@ function fightCard(f) {
     const opt = (k, label) => `<button class="b ${f.my_vote === k ? "gold" : ""}" onclick="vote(${f.id},'${k}')">${label} <small style="color:inherit">(${v[k]})</small></button>`;
     const lead = Math.max(v.A, v.B, v.draw);
     const head = f.status === "done"
-      ? `Ergebnis bestätigt mit ${lead} ${lead === 1 ? "Stimme" : "Stimmen"} (nötig: ${f.needed}).${f.mine ? " Falsch? Stimme ändern." : ""}`
-      : `Wer hat gewonnen? Das Ergebnis gilt ab <b>${f.needed}</b> gleichen ${f.needed === 1 ? "Stimme" : "Stimmen"} der Tipper.${f.locked_by ? ` Gesperrt von ${esc(f.locked_by)}.` : ""}`;
-    act2 = `<div class="admin" style="display:block"><div class="hint" style="margin:0 0 8px">${head}</div>
-      ${f.mine ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${opt("A", short(f.a))}${opt("B", short(f.b))}${opt("draw", "Unentsch./NC")}</div>`
-               : `<div class="hint" style="margin:0">Abstimmen dürfen nur die, die diesen Kampf getippt haben.</div>`}</div>`;
+      ? `Ergebnis steht fest (${lead} ${lead === 1 ? "Stimme" : "Stimmen"}, nötig: ${f.needed}).`
+      : `<b style="color:var(--text)">Kampf vorbei? Sieger bestätigen</b> (das ist kein Tipp). Das Ergebnis gilt ab <b>${f.needed}</b> gleichen ${f.needed === 1 ? "Stimme" : "Stimmen"} der Tipper.${f.locked_by ? ` Gesperrt von ${esc(f.locked_by)}.` : ""}`;
+    const buttons = f.status !== "done" && f.mine
+      ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${opt("A", short(f.a))}${opt("B", short(f.b))}${opt("draw", "Unentsch./NC")}</div>`
+      : f.status !== "done" ? `<div class="hint" style="margin:0">Du hast hier nicht getippt. Den Sieger bestätigen nur die, die getippt haben.</div>` : "";
+    act2 = `<div class="admin" style="display:block"><div class="hint" style="margin:0 0 8px">${head}</div>${buttons}</div>`;
   }
   return `<div class="card"><div class="meta"><span>${esc(f.info || "Kampf " + f.pos)}</span>${chip}</div>
     <div class="vs">${btn("A", f.a)}<span class="x">VS</span>${btn("B", f.b)}</div>${foot}${act2}${logHtml(f)}</div>`;
