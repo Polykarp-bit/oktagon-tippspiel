@@ -2,9 +2,9 @@
 -- Oktagon Tippspiel – Datenbank für Supabase
 -- Einmal komplett im Supabase "SQL Editor" ausführen. Kein Admin nötig:
 --  * Jeder Mitspieler kann einen Kampf sperren, sobald er beginnt.
---    Die Tipps bleiben danach noch 2 Minuten verdeckt. In dieser Zeit können
---    2 Mitspieler die Sperre gemeinsam aufheben (falls zu früh gesperrt).
---    Danach ist die Sperre endgültig.
+--    In den ersten 2 Minuten danach können 2 Mitspieler die Sperre gemeinsam
+--    aufheben (falls zu früh gesperrt). Danach ist die Sperre endgültig.
+--  * Die Tipps der anderen bleiben verdeckt, bis das Ergebnis bestätigt ist.
 --  * Jede Aktion (Tipp, Änderung, Sperren, Entsperren, Ergebnis) wird protokolliert.
 --    Das Protokoll eines Kampfes sehen alle, sobald der Kampf entschieden ist.
 --  * Das Ergebnis gilt, sobald mehr als die Hälfte der Tipper dieses
@@ -152,7 +152,7 @@ language sql stable security definer set search_path = public, extensions as $$
     from fights where id = p_fight
 $$;
 
--- Gesamtzustand. Tipps anderer werden erst sichtbar, wenn die Sperre endgültig ist.
+-- Gesamtzustand. Tipps anderer werden erst sichtbar, wenn das Ergebnis bestätigt ist.
 create or replace function _state(v_player uuid) returns json
 language sql security definer set search_path = public, extensions as $$
   select json_build_object(
@@ -174,7 +174,7 @@ language sql security definer set search_path = public, extensions as $$
                     'B', count(*) filter (where vote = 'B'),
                     'draw', count(*) filter (where vote = 'draw'))
                     from votes v where v.fight_id = f.id),
-        'bets', case when f.status = 'open' or _undo_left(f.id) > 0 then null else (
+        'bets', case when f.status <> 'done' then null else (
           select coalesce(json_agg(json_build_object('name', p.name, 'pick', b.pick, 'net', po.net)
                                    order by b.pick, p.name), '[]')
             from bets b join players p on p.id = b.player_id
@@ -254,7 +254,7 @@ begin
   end if;
 end $$;
 
--- Zu früh gesperrt? Solange die Tipps noch verdeckt sind, können 2 verschiedene Mitspieler
+-- Zu früh gesperrt? In den ersten 2 Minuten nach dem Sperren können 2 verschiedene Mitspieler
 -- die Sperre gemeinsam aufheben. Danach gibt es KEINE Möglichkeit mehr, den Kampf zu öffnen.
 -- p_withdraw = true zieht den eigenen Antrag zurück. Gibt true zurück, wenn entsperrt wurde.
 create or replace function unlock_fight(p_name text, p_pin text, p_fight int, p_withdraw boolean default false) returns boolean
@@ -340,7 +340,7 @@ grant execute on function join_game(text, text), get_state(text, text), place_be
 -- 4. Mehrheit für Ergebnisse: 0.5 = mehr als die Hälfte der Tipper
 -- ---------------------------------------------------------------------
 insert into settings (key, value) values ('quorum', '0.5') on conflict (key) do nothing;
--- Sekunden nach dem Sperren, in denen Tipps verdeckt bleiben und entsperrt werden kann
+-- Sekunden nach dem Sperren, in denen noch entsperrt werden kann
 insert into settings (key, value) values ('grace_seconds', '120') on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------

@@ -212,9 +212,12 @@ function fightCard(f) {
   const grace = f.status === "locked" && f.undo_until > Date.now();
   if (grace) {
     const left = Math.ceil((f.undo_until - Date.now()) / 1000);
-    foot = `<div class="hint">🔒 Gesperrt von ${esc(f.locked_by || "?")}. Die Tipps werden in <b>${fmtLeft(left)}</b> aufgedeckt. Bis dahin können 2 von euch die Sperre gemeinsam aufheben, danach ist sie endgültig.</div>`;
+    foot = `<div class="hint">🔒 Gesperrt von ${esc(f.locked_by || "?")}. Noch <b>${fmtLeft(left)}</b> können 2 von euch die Sperre gemeinsam aufheben, danach ist sie endgültig.</div>`;
   } else if (f.status === "open") {
-    foot = `<div class="hint">${f.count} ${f.count === 1 ? "Tipp" : "Tipps"} abgegeben · Wer was getippt hat, siehst du ab Kampfbeginn.${f.count === 0 ? ` <a href="#" style="color:var(--muted)" onclick="delFight(${f.id});return false">Kampf entfernen</a>` : ""}${f.mine ? ` <a href="#" style="color:var(--muted)" onclick="bet(${f.id},null);return false">Tipp löschen</a>` : ""}</div>`;
+    foot = `<div class="hint">${f.count} ${f.count === 1 ? "Tipp" : "Tipps"} abgegeben · Wer was getippt hat, siehst du nach dem Kampf.${f.count === 0 ? ` <a href="#" style="color:var(--muted)" onclick="delFight(${f.id});return false">Kampf entfernen</a>` : ""}${f.mine ? ` <a href="#" style="color:var(--muted)" onclick="bet(${f.id},null);return false">Tipp löschen</a>` : ""}</div>`;
+  } else if (f.status === "locked") {
+    const mine = f.mine === "A" ? f.a : f.mine === "B" ? f.b : null;
+    foot = `<div class="hint">${f.count} ${f.count === 1 ? "Tipp" : "Tipps"} abgegeben · ${mine ? `Dein Tipp: <b>${esc(mine)}</b>` : "Du hast hier nicht getippt."} · Wer was getippt hat, wird aufgedeckt, sobald das Ergebnis bestätigt ist.</div>`;
   } else {
     const side = (s) => f.bets.filter((b) => b.pick === s)
       .map((b) => `<div class="n"><span>${esc(b.name)}</span>${f.status === "done" ? `<span class="${cls(b.net)}">${euro(b.net)}</span>` : ""}</div>`).join("") || `<small>niemand</small>`;
@@ -281,9 +284,9 @@ function rulesHtml() {
   return `<div class="card"><b>So funktioniert's</b><ul class="rules">
     <li>Pro Kampf tippst du auf einen Sieger, Einsatz ${STAKE} €. Du musst nicht jeden Kampf tippen.</li>
     <li>Bis zum Kampfbeginn kannst du deinen Tipp ändern. Wenn der Kampf losgeht, drückt einer von euch „Kampf beginnt“. Ab dann sind alle Tipps fix.</li>
-    <li>Zu früh gesperrt? Die Tipps bleiben nach dem Sperren noch 2 Minuten verdeckt. In der Zeit können 2 von euch die Sperre gemeinsam aufheben. Danach kann niemand mehr entsperren oder etwas ändern.</li>
+    <li>Zu früh gesperrt? In den ersten 2 Minuten nach dem Sperren können 2 von euch die Sperre gemeinsam aufheben. Danach kann niemand mehr entsperren oder etwas ändern.</li>
     <li>Alles wird protokolliert: wer wann getippt, geändert, gesperrt, entsperrt oder ein Ergebnis bestätigt hat. Das Protokoll sehen alle, sobald der Kampf entschieden ist.</li>
-    <li>Was die anderen getippt haben, siehst du erst ab Kampfbeginn.</li>
+    <li>Was die anderen getippt haben, siehst du erst, wenn der Kampf vorbei und das Ergebnis bestätigt ist.</li>
     <li>Nach dem Kampf bestätigt ihr den Sieger. Das Ergebnis gilt, sobald mehr als die Hälfte der Tipper dieses Kampfes dasselbe bestätigt hat.</li>
     <li>Die Einsätze der Verlierer werden gleichmäßig unter den Gewinnern aufgeteilt.</li>
     <li>Haben alle richtig oder alle falsch getippt, oder endet der Kampf unentschieden / No Contest, gibt es für niemanden Plus oder Minus.</li>
@@ -360,7 +363,7 @@ function delFight(id) { if (confirm("Kampf entfernen?")) act("delete_fight", { p
 
 load();
 setInterval(() => { if (!document.hidden) load(); }, 8000);
-// Countdown der Rückgängig-Frist; nach Ablauf neu laden, damit die Tipps aufgedeckt werden
+// Countdown der Rückgängig-Frist; nach Ablauf neu laden, damit der Entsperren-Knopf verschwindet
 setInterval(() => {
   const g = state?.fights.filter((f) => f.undo_until) || [];
   if (!g.length || tab !== "fights") return;
