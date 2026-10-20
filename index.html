@@ -219,9 +219,10 @@ function fightCard(f) {
     const mine = f.mine === "A" ? f.a : f.mine === "B" ? f.b : null;
     foot = `<div class="hint">${f.count} ${f.count === 1 ? "Tipp" : "Tipps"} abgegeben · ${mine ? `Dein Tipp: <b>${esc(mine)}</b>` : "Du hast hier nicht getippt."} · Wer was getippt hat, wird aufgedeckt, sobald das Ergebnis bestätigt ist.</div>`;
   } else {
-    const side = (s) => f.bets.filter((b) => b.pick === s)
+    const bets = f.bets || [];
+    const side = (s) => bets.filter((b) => b.pick === s)
       .map((b) => `<div class="n"><span>${esc(b.name)}</span>${f.status === "done" ? `<span class="${cls(b.net)}">${euro(b.net)}</span>` : ""}</div>`).join("") || `<small>niemand</small>`;
-    const me = f.bets.find((b) => b.name === user.name);
+    const me = bets.find((b) => b.name === user.name);
     let line = !f.mine ? "Du hast hier nicht getippt." : "";
     if (f.status === "done" && me) line = `Dein Ergebnis: <b class="${cls(me.net)}">${euro(me.net)}</b>`;
     if (f.status === "done" && f.result === "draw") line = "Unentschieden / No Contest: alle bekommen ihren Einsatz zurück.";
