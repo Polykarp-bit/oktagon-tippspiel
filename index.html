@@ -274,11 +274,12 @@ async function unlockFight(id, withdraw) {
   await load();
 }
 const fmtLeft = (s) => (s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} min` : `${s} s`);
+const openLogs = new Set(); // aufgeklappte Protokolle bleiben beim Neuladen offen
 function logHtml(f) {
   if (!f.log || !f.log.length) return "";
   const t = (d) => new Date(d).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const warn = (a) => /entsperr|geändert nach|Entsperren/.test(a);
-  return `<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Protokoll (${f.log.length} Einträge)</summary>
+  return `<details style="margin-top:10px" ${openLogs.has(f.id) ? "open" : ""} ontoggle="this.open ? openLogs.add(${f.id}) : openLogs.delete(${f.id})"><summary class="hint" style="cursor:pointer">Protokoll (${f.log.length} Einträge)</summary>
     <table style="font-size:13px;margin-top:6px">${f.log.map((e) => `<tr><td class="num" style="padding:5px 6px 5px 0;color:var(--muted);font-variant-numeric:tabular-nums">${t(e.at)}</td><td style="padding:5px 6px">${esc(e.player)}</td><td style="padding:5px 0" class="${warn(e.action) ? "minus" : ""}">${esc(e.action)}</td></tr>`).join("")}</table></details>`;
 }
 function vote(id, v) {
