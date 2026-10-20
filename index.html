@@ -7,8 +7,8 @@
 <title>Oktagon Tippspiel</title>
 <script>
   // ==== KONFIGURATION: Werte aus Supabase > Project Settings > API eintragen ====
-  const SUPABASE_URL = "https://DEIN-PROJEKT.supabase.co";
-  const SUPABASE_KEY = "DEIN-ANON-ODER-PUBLISHABLE-KEY";
+  const SUPABASE_URL = "https://nobiiatazghhylxgkmeu.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_FoetFjG44JUAC2IvjMmGWQ_JBXmhZjb";
   // ===============================================================================
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -93,7 +93,6 @@ const store = {
   set(k, v) { try { v == null ? localStorage.removeItem("okt_" + k) : localStorage.setItem("okt_" + k, JSON.stringify(v)); } catch {} },
 };
 let user = store.get("user");          // {name, pin}
-let adminPw = store.get("admin");
 let tab = store.get("tab") || "fights";
 let state = null;
 let busy = false;
@@ -127,6 +126,7 @@ async function load() {
   if (busy) return;
   try {
     state = user ? await rpc("get_state", { p_name: user.name, p_pin: user.pin }) : null;
+    state?.fights.forEach((f) => (f.undo_until = f.undo_left > 0 ? Date.now() + f.undo_left * 1000 : 0));
   } catch (e) {
     if (/PIN falsch/.test(e.message)) { user = null; store.set("user", null); }
     else toast(e.message);
@@ -141,7 +141,6 @@ async function act(fn, args, okMsg) {
   finally { busy = false; }
   await load();
 }
-const asAdmin = (fn, args, ok) => act(fn, { p_pw: adminPw, ...args }, ok);
 
 // ---------- Ansichten ----------
 function render() {
@@ -154,18 +153,17 @@ function render() {
 
   $("#me").innerHTML = `${esc(user.name)}<br><a href="#" onclick="logout();return false">abmelden</a>`;
   const tabs = [["fights", "🥊", "Kämpfe"], ["board", "🏆", "Tabelle"], ["invite", "📱", "Einladen"]];
-  if (adminPw) tabs.push(["admin", "⚙️", "Admin"]);
   if (!tabs.some((t) => t[0] === tab)) tab = "fights";
   $("#nav").hidden = false;
   $("#nav").innerHTML = tabs.map(([k, i, l]) => `<button class="${k === tab ? "on" : ""}" onclick="go('${k}')"><b>${i}</b>${l}</button>`).join("");
-  view.innerHTML = { fights: fightsView, board: boardView, invite: inviteView, admin: adminView }[tab]();
+  view.innerHTML = { fights: fightsView, board: boardView, invite: inviteView }[tab]();
   if (tab === "invite") drawQr();
 }
 function go(t) { tab = t; store.set("tab", t); render(); window.scrollTo(0, 0); }
 
 function setupView() {
   return `<div class="card setup"><h2>Noch nicht eingerichtet</h2>
-    <p>Trage oben in der <code>index.html</code> die Werte <code>SUPABASE_URL</code> und <code>SUPABASE_KEY</code> ein. Details stehen in der <code>ANLEITUNG.md</code>.</p></div>`;
+    <p>Trage oben in der <code>index.html</code> die Werte <code>SUPABASE_URL</code> und <code>SUPABASE_KEY</code> ein. Details stehen in der <code>README.md</code>.</p></div>`;
 }
 
 function loginView() {
@@ -198,7 +196,7 @@ function fightsView() {
   const open = state.fights.filter((f) => f.status === "open");
   const missing = open.filter((f) => !f.mine).length;
   return `<p class="hint">${open.length ? `Tippe, wer gewinnt. Pro Kampf ${STAKE} € Einsatz. Tipps sind änderbar, bis der Kampf beginnt. ${missing ? `<b style="color:var(--gold)">${missing} offene${missing === 1 ? "r Kampf" : " Kämpfe"} ohne Tipp.</b>` : "✅ Alles getippt."}` : "Alle Kämpfe sind gesperrt."}</p>`
-    + fights.map(fightCard).join("");
+    + fights.map(fightCard).join("") + addFightHtml();
 }
 
 function fightCard(f) {
@@ -211,8 +209,12 @@ function fightCard(f) {
     return `<button class="${c.join(" ")}" ${click}>${esc(name)}${f.status === "done" && f.result === side ? "<br><small style='color:inherit'>🏆 Sieger</small>" : ""}</button>`;
   };
   let foot = "";
-  if (f.status === "open") {
-    foot = `<div class="hint">${f.count} ${f.count === 1 ? "Tipp" : "Tipps"} abgegeben · Wer was getippt hat, siehst du ab Kampfbeginn.${f.mine ? ` <a href="#" style="color:var(--muted)" onclick="bet(${f.id},null);return false">Tipp löschen</a>` : ""}</div>`;
+  const grace = f.status === "locked" && f.undo_until > Date.now();
+  if (grace) {
+    const left = Math.ceil((f.undo_until - Date.now()) / 1000);
+    foot = `<div class="hint">🔒 Gesperrt von ${esc(f.locked_by || "?")}. Die Tipps werden in <b>${fmtLeft(left)}</b> aufgedeckt. Bis dahin können 2 von euch die Sperre gemeinsam aufheben, danach ist sie endgültig.</div>`;
+  } else if (f.status === "open") {
+    foot = `<div class="hint">${f.count} ${f.count === 1 ? "Tipp" : "Tipps"} abgegeben · Wer was getippt hat, siehst du ab Kampfbeginn.${f.count === 0 ? ` <a href="#" style="color:var(--muted)" onclick="delFight(${f.id});return false">Kampf entfernen</a>` : ""}${f.mine ? ` <a href="#" style="color:var(--muted)" onclick="bet(${f.id},null);return false">Tipp löschen</a>` : ""}</div>`;
   } else {
     const side = (s) => f.bets.filter((b) => b.pick === s)
       .map((b) => `<div class="n"><span>${esc(b.name)}</span>${f.status === "done" ? `<span class="${cls(b.net)}">${euro(b.net)}</span>` : ""}</div>`).join("") || `<small>niemand</small>`;
@@ -222,16 +224,24 @@ function fightCard(f) {
     if (f.status === "done" && f.result === "draw") line = "Unentschieden / No Contest: alle bekommen ihren Einsatz zurück.";
     foot = `<div class="sides"><div>${side("A")}</div><div>${side("B")}</div></div>${line ? `<div class="hint">${line}</div>` : ""}`;
   }
-  let adm = "";
-  if (adminPw) {
-    const a = esc(f.a.split(" ").pop()), b = esc(f.b.split(" ").pop());
-    adm = `<div class="admin">` + (
-      f.status === "open" ? `<button class="b gold" onclick="setStatus(${f.id},'locked')">🔒 Kampf beginnt – sperren</button>`
-      : f.status === "locked" ? `<button class="b" onclick="setResult(${f.id},'A')">${a} gewinnt</button><button class="b" onclick="setResult(${f.id},'B')">${b} gewinnt</button><button class="b" onclick="setResult(${f.id},'draw')">Unentsch./NC</button><button class="b red" onclick="setStatus(${f.id},'open')">wieder öffnen</button>`
-      : `<button class="b red" onclick="setResult(${f.id},null)">Ergebnis zurücknehmen</button>`) + `</div>`;
+  let act2 = "";
+  if (grace) {
+    act2 = `<div class="admin">${f.my_unlock
+      ? `<span class="hint" style="margin:0;align-self:center">Du willst entsperren. Es fehlt noch 1 Person.</span><button class="b" onclick="unlockFight(${f.id},true)">Zurückziehen</button>`
+      : `<button class="b red" onclick="unlockFight(${f.id},false)">↩︎ Zu früh gesperrt – entsperren (${f.unlock_count}/2)</button>`}</div>`;
+  } else if (f.status === "open") {
+    act2 = `<div class="admin"><button class="b gold" onclick="lockFight(${f.id})">🔔 Kampf beginnt – Tipps sperren</button></div>`;
+  } else {
+    const v = f.votes, short = (s) => esc(s.split(" ").pop());
+    const opt = (k, label) => `<button class="b ${f.my_vote === k ? "gold" : ""}" onclick="vote(${f.id},'${k}')">${label} <small style="color:inherit">(${v[k]})</small></button>`;
+    const lead = Math.max(v.A, v.B, v.draw);
+    act2 = `<div class="admin" style="display:block"><div class="hint" style="margin:0 0 8px">${f.status === "done"
+        ? `Ergebnis bestätigt (${lead} von ${f.needed} nötigen Stimmen). Falsch? Stimme ändern.`
+        : `Wer hat gewonnen? Das Ergebnis gilt ab <b>${f.needed}</b> gleichen Stimmen.${f.locked_by ? ` Gesperrt von ${esc(f.locked_by)}.` : ""}`}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${opt("A", short(f.a))}${opt("B", short(f.b))}${opt("draw", "Unentsch./NC")}</div></div>`;
   }
   return `<div class="card"><div class="meta"><span>${esc(f.info || "Kampf " + f.pos)}</span>${chip}</div>
-    <div class="vs">${btn("A", f.a)}<span class="x">VS</span>${btn("B", f.b)}</div>${foot}${adm}</div>`;
+    <div class="vs">${btn("A", f.a)}<span class="x">VS</span>${btn("B", f.b)}</div>${foot}${act2}${logHtml(f)}</div>`;
 }
 
 function bet(id, pick) {
@@ -240,21 +250,41 @@ function bet(id, pick) {
   f.mine = pick; render(); // sofort anzeigen
   act("place_bet", { p_name: user.name, p_pin: user.pin, p_fight: id, p_pick: pick });
 }
-function setStatus(id, s) {
-  if (s === "open" && !confirm("Kampf wieder für Tipps öffnen?")) return;
-  asAdmin("admin_set_status", { p_id: id, p_status: s });
-}
-function setResult(id, r) {
+function lockFight(id) {
   const f = state.fights.find((x) => x.id === id);
-  const txt = r === "A" ? f.a + " gewinnt" : r === "B" ? f.b + " gewinnt" : r === "draw" ? "Unentschieden / No Contest" : "Ergebnis zurücknehmen";
-  if (confirm(txt + "?")) asAdmin("admin_set_result", { p_id: id, p_result: r });
+  if (confirm(`${f.a} vs. ${f.b} beginnt? Danach kann niemand mehr tippen oder ändern.`))
+    act("lock_fight", { p_name: user.name, p_pin: user.pin, p_fight: id });
+}
+async function unlockFight(id, withdraw) {
+  busy = true;
+  try {
+    const opened = await rpc("unlock_fight", { p_name: user.name, p_pin: user.pin, p_fight: id, p_withdraw: withdraw });
+    toast(opened ? "Kampf wieder offen" : withdraw ? "Antrag zurückgezogen" : "Antrag gespeichert. Eine zweite Person muss noch zustimmen.", true);
+  } catch (e) { toast(e.message); }
+  finally { busy = false; }
+  await load();
+}
+const fmtLeft = (s) => (s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} min` : `${s} s`);
+function logHtml(f) {
+  if (!f.log || !f.log.length) return "";
+  const t = (d) => new Date(d).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const warn = (a) => /entsperr|geändert nach|Entsperren/.test(a);
+  return `<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Protokoll (${f.log.length} Einträge)</summary>
+    <table style="font-size:13px;margin-top:6px">${f.log.map((e) => `<tr><td class="num" style="padding:5px 6px 5px 0;color:var(--muted);font-variant-numeric:tabular-nums">${t(e.at)}</td><td style="padding:5px 6px">${esc(e.player)}</td><td style="padding:5px 0" class="${warn(e.action) ? "minus" : ""}">${esc(e.action)}</td></tr>`).join("")}</table></details>`;
+}
+function vote(id, v) {
+  const f = state.fights.find((x) => x.id === id);
+  act("vote_result", { p_name: user.name, p_pin: user.pin, p_fight: id, p_vote: f.my_vote === v ? null : v });
 }
 
 function rulesHtml() {
   return `<div class="card"><b>So funktioniert's</b><ul class="rules">
     <li>Pro Kampf tippst du auf einen Sieger, Einsatz ${STAKE} €. Du musst nicht jeden Kampf tippen.</li>
-    <li>Bis zum Kampfbeginn kannst du deinen Tipp ändern. Dann wird er gesperrt.</li>
+    <li>Bis zum Kampfbeginn kannst du deinen Tipp ändern. Wenn der Kampf losgeht, drückt einer von euch „Kampf beginnt“. Ab dann sind alle Tipps fix.</li>
+    <li>Zu früh gesperrt? Die Tipps bleiben nach dem Sperren noch 2 Minuten verdeckt. In der Zeit können 2 von euch die Sperre gemeinsam aufheben. Danach kann niemand mehr entsperren oder etwas ändern.</li>
+    <li>Alles wird protokolliert: wer wann getippt, geändert, gesperrt, entsperrt oder ein Ergebnis bestätigt hat. Das Protokoll sehen alle, sobald der Kampf entschieden ist.</li>
     <li>Was die anderen getippt haben, siehst du erst ab Kampfbeginn.</li>
+    <li>Nach dem Kampf bestätigt ihr den Sieger. Das Ergebnis gilt, sobald mehr als die Hälfte der Tipper dieses Kampfes dasselbe bestätigt hat.</li>
     <li>Die Einsätze der Verlierer werden gleichmäßig unter den Gewinnern aufgeteilt.</li>
     <li>Haben alle richtig oder alle falsch getippt, oder endet der Kampf unentschieden / No Contest, gibt es für niemanden Plus oder Minus.</li>
     <li>Am Ende zeigt die Tabelle, wer im Plus und wer im Minus ist.</li></ul></div>`;
@@ -266,8 +296,37 @@ function boardView() {
     <td class="num"><small>${p.won}✓ ${p.lost}✗</small></td><td class="num big ${cls(p.net)}">${euro(p.net)}</td></tr>`).join("");
   return `<h2>Tabelle <small>(${done} von ${state.fights.length} Kämpfen entschieden)</small></h2>
     <div class="card" style="padding:4px 12px"><table><tr><th></th><th>Name</th><th class="num">Tipps</th><th class="num">Bilanz</th></tr>${rows}</table></div>
-    <p class="hint">Am Ende zahlt, wer im Minus ist, und wer im Plus ist, bekommt. Die Summe aller Bilanzen ist immer 0 €.</p>
+    ${settleHtml()}
     ${rulesHtml()}`;
+}
+
+// Ausgleich mit möglichst wenig Überweisungen: gleiche Beträge direkt paaren, sonst größter Schuldner an größten Gläubiger
+function settlements(board) {
+  const debt = board.filter((p) => p.net < 0).map((p) => ({ name: p.name, c: Math.round(-p.net * 100) }));
+  const cred = board.filter((p) => p.net > 0).map((p) => ({ name: p.name, c: Math.round(p.net * 100) }));
+  const out = [];
+  for (const d of debt) {
+    const m = cred.find((k) => k.c === d.c);
+    if (m) { out.push({ from: d.name, to: m.name, c: d.c }); d.c = 0; m.c = 0; }
+  }
+  for (;;) {
+    const d = debt.filter((x) => x.c > 0).sort((x, y) => y.c - x.c)[0];
+    const k = cred.filter((x) => x.c > 0).sort((x, y) => y.c - x.c)[0];
+    if (!d || !k) break;
+    const c = Math.min(d.c, k.c);
+    out.push({ from: d.name, to: k.name, c }); d.c -= c; k.c -= c;
+  }
+  return out.filter((t) => t.c > 0);
+}
+function settleHtml() {
+  const t = settlements(state.board);
+  const open = state.fights.some((f) => f.status !== "done");
+  if (!t.length) return `<p class="hint">Noch nichts zu überweisen.</p>`;
+  const amt = (c) => (c / 100).toLocaleString("de-DE", { minimumFractionDigits: c % 100 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
+  return `<h2>Wer zahlt an wen ${open ? "<small>(Zwischenstand)</small>" : ""}</h2>
+    <div class="card" style="padding:4px 12px"><table>${t.map((x) => `<tr${x.from === user.name || x.to === user.name ? ' style="font-weight:700"' : ""}>
+      <td>${esc(x.from)}</td><td style="color:var(--muted)">→</td><td>${esc(x.to)}</td><td class="num big">${amt(x.c)}</td></tr>`).join("")}</table></div>
+    <p class="hint">${t.length} ${t.length === 1 ? "Überweisung" : "Überweisungen"} reichen, damit alle quitt sind.${open ? " Ändert sich noch, solange Kämpfe offen sind." : ""}</p>`;
 }
 
 const appUrl = () => location.origin + location.pathname;
@@ -281,48 +340,32 @@ function drawQr() {
   new QRCode($("#qr"), { text: appUrl(), width: 480, height: 480, correctLevel: QRCode.CorrectLevel.M });
 }
 
-function adminView() {
-  const fights = state.fights.map((f) => `<form class="row" onsubmit="saveFight(event,${f.id})">
-      <input name="pos" type="number" value="${f.pos}" title="Reihenfolge (1 = erster Kampf)">
-      <input name="a" value="${esc(f.a)}" required><input name="b" value="${esc(f.b)}" required>
-      <input name="info" value="${esc(f.info)}" placeholder="Info (z. B. Main Event)" style="grid-column:1/3">
-      <div style="display:flex;gap:6px"><button class="b gold">Speichern</button><button class="b red" type="button" onclick="delFight(${f.id})">✕</button></div>
-    </form>`).join('<div style="height:8px"></div>');
-  const players = state.board.map((p) => `<tr><td>${esc(p.name)}</td><td class="num"><button class="b red" onclick="delPlayer('${esc(p.name).replace(/'/g, "\\'")}')">entfernen</button></td></tr>`).join("");
-  return `<h2>Admin</h2>
-    <p class="hint">Kämpfe sperren und Sieger eintragen geht direkt im Tab „Kämpfe“ auf jeder Karte.</p>
-    <div class="card"><b>Kämpfe bearbeiten</b><p class="hint" style="margin-top:4px">Nr. = Reihenfolge (1 = erster Kampf des Abends, höchste Nr. = Main Event)</p>${fights}</div>
-    <div class="card"><b>Neuer Kampf</b>
-      <form class="row" style="margin-top:10px" onsubmit="saveFight(event,null)">
-        <input name="pos" type="number" placeholder="Nr."><input name="a" placeholder="Kämpfer A" required><input name="b" placeholder="Kämpfer B" required>
-        <input name="info" placeholder="Info (optional)" style="grid-column:1/3"><button class="b gold">Hinzufügen</button>
-      </form></div>
-    <div class="card"><b>Mitspieler (${state.board.length})</b><table>${players}</table>
-      <div style="margin-top:12px"><button class="b" onclick="asAdmin('admin_set_registration',{p_closed:${!state.registration_closed}})">${state.registration_closed ? "Anmeldung wieder öffnen" : "Anmeldung schließen"}</button></div></div>
-    <button class="b full" onclick="adminLogout()">Admin abmelden</button>`;
+let addOpen = false;
+function addFightHtml() {
+  return `<details class="card" ${addOpen ? "open" : ""} ontoggle="addOpen=this.open"><summary style="cursor:pointer;font-weight:600">Kampf fehlt? Hinzufügen</summary>
+    <form class="row" style="margin-top:12px;grid-template-columns:1fr 1fr" onsubmit="addFight(event)">
+      <input name="a" placeholder="Kämpfer A" required><input name="b" placeholder="Kämpfer B" required>
+      <input name="info" placeholder="Info (optional)"><button class="b gold">Hinzufügen</button>
+    </form><div class="hint">Neue Kämpfe kommen ans Ende der Liste. Ein Kampf ohne Tipps lässt sich wieder entfernen.</div></details>`;
 }
-function saveFight(ev, id) {
+function addFight(ev) {
   ev.preventDefault();
   const f = new FormData(ev.target);
   document.activeElement?.blur();
-  asAdmin("admin_save_fight", { p_id: id, p_pos: f.get("pos") ? Number(f.get("pos")) : null, p_a: f.get("a"), p_b: f.get("b"), p_info: f.get("info") }, "Gespeichert");
+  addOpen = false;
+  act("add_fight", { p_name: user.name, p_pin: user.pin, p_a: f.get("a"), p_b: f.get("b"), p_info: f.get("info") }, "Kampf hinzugefügt");
 }
-function delFight(id) { if (confirm("Kampf inkl. aller Tipps löschen?")) asAdmin("admin_delete_fight", { p_id: id }, "Gelöscht"); }
-function delPlayer(name) { if (confirm(name + " inkl. aller Tipps entfernen?")) asAdmin("admin_delete_player", { p_name: name }, "Entfernt"); }
+function delFight(id) { if (confirm("Kampf entfernen?")) act("delete_fight", { p_name: user.name, p_pin: user.pin, p_fight: id }, "Entfernt"); }
 
-async function adminLogin() {
-  const pw = prompt("Admin-Passwort");
-  if (!pw) return;
-  try { await rpc("admin_state", { p_pw: pw }); adminPw = pw; store.set("admin", pw); tab = "admin"; render(); toast("Admin-Modus aktiv", true); }
-  catch (e) { toast(e.message); }
-}
-function adminLogout() { adminPw = null; store.set("admin", null); go("fights"); }
-
-// Admin-Modus über ...index.html#admin
-if (location.hash === "#admin") { history.replaceState(null, "", location.pathname + location.search); setTimeout(adminLogin, 300); }
 
 load();
 setInterval(() => { if (!document.hidden) load(); }, 8000);
+// Countdown der Rückgängig-Frist; nach Ablauf neu laden, damit die Tipps aufgedeckt werden
+setInterval(() => {
+  const g = state?.fights.filter((f) => f.undo_until) || [];
+  if (!g.length || tab !== "fights") return;
+  if (g.some((f) => f.undo_until <= Date.now())) { g.forEach((f) => (f.undo_until = 0)); load(); } else render();
+}, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 </script>
 </body>
