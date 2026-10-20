@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0f">
+<title>Oktagon Tippspiel</title>
+<script>
+  // ==== KONFIGURATION: Werte aus Supabase > Project Settings > API eintragen ====
+  const SUPABASE_URL = "https://DEIN-PROJEKT.supabase.co";
+  const SUPABASE_KEY = "DEIN-ANON-ODER-PUBLISHABLE-KEY";
+  // ===============================================================================
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0d0d0f; --card: #18181c; --card2: #222228; --line: #2e2e36;
+    --text: #f2f2f4; --muted: #9a9aa6; --gold: #f5c400; --gold-text: #141414;
+    --plus: #34c472; --minus: #ff5a5a; --blue: #5aa9ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding: 0 16px calc(90px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+  header { padding: 18px 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: .5px; text-transform: uppercase; }
+  h1 span { color: var(--gold); }
+  h2 { font-size: 17px; margin: 22px 0 10px; }
+  .me { color: var(--muted); font-size: 14px; text-align: right; }
+  .me a { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 12px 0; }
+  .meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  .chip { font-size: 12px; padding: 3px 9px; border-radius: 99px; white-space: nowrap; background: var(--card2); }
+  .chip.open { color: var(--plus); } .chip.locked { color: var(--gold); } .chip.done { color: var(--blue); }
+  .vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+  .vs .x { align-self: center; color: var(--muted); font-size: 13px; font-weight: 700; }
+  .pick { border: 2px solid var(--line); background: var(--card2); color: var(--text); border-radius: 12px;
+    padding: 14px 8px; font: inherit; font-weight: 650; text-align: center; min-height: 64px; cursor: pointer; word-break: break-word; }
+  .pick:disabled { cursor: default; }
+  .pick.sel { border-color: var(--gold); background: var(--gold); color: var(--gold-text); }
+  .pick.win { box-shadow: 0 0 0 3px var(--plus) inset; }
+  .pick.dim { opacity: .45; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 14px; }
+  .sides div { background: var(--card2); border-radius: 10px; padding: 8px 10px; min-height: 36px; }
+  .sides .n { display: flex; justify-content: space-between; gap: 6px; }
+  .plus { color: var(--plus); } .minus { color: var(--minus); } .zero { color: var(--muted); }
+  .admin { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  button.b { border: 0; border-radius: 10px; padding: 10px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    background: var(--card2); color: var(--text); border: 1px solid var(--line); }
+  button.b.gold { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
+  button.b.red { color: var(--minus); }
+  button.b.full { width: 100%; padding: 14px; font-size: 16px; }
+  input { width: 100%; font: inherit; padding: 13px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card2); color: var(--text); margin: 6px 0 12px; }
+  label { font-size: 14px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 11px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.big { font-weight: 700; font-size: 17px; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: #111114ee; backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line); display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+  nav button { flex: 1; max-width: 160px; background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; padding: 12px 4px 14px; cursor: pointer; }
+  nav button b { display: block; font-size: 20px; line-height: 1.1; }
+  nav button.on { color: var(--gold); }
+  #qr { background: #fff; padding: 14px; border-radius: 14px; width: max-content; margin: 10px auto; }
+  #qr img, #qr canvas { display: block; width: 240px; height: 240px; }
+  .center { text-align: center; }
+  .err { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 608px; margin: 0 auto;
+    background: var(--minus); color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 600; z-index: 9; }
+  .ok { background: var(--plus); }
+  .row { display: grid; grid-template-columns: 52px 1fr 1fr; gap: 6px; }
+  .row input { margin: 0 0 6px; padding: 10px 8px; }
+  small { color: var(--muted); }
+  ul.rules { padding-left: 18px; color: var(--muted); font-size: 14px; } ul.rules li { margin: 4px 0; }
+  .setup code { background: var(--card2); padding: 2px 5px; border-radius: 5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Oktagon <span>Tippspiel</span></h1>
+  <div class="me" id="me"></div>
+</header>
+<main id="view"></main>
+<nav id="nav" hidden></nav>
+<div id="toast" class="err" hidden></div>
+
+<script>
+const STAKE = 10;
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem("okt_" + k)); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem("okt_" + k) : localStorage.setItem("okt_" + k, JSON.stringify(v)); } catch {} },
+};
+let user = store.get("user");          // {name, pin}
+let adminPw = store.get("admin");
+let tab = store.get("tab") || "fights";
+let state = null;
+let busy = false;
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const euro = (n) => {
+  n = Number(n) || 0;
+  const s = Math.abs(n).toLocaleString("de-DE", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
+  return n > 0 ? "+" + s : n < 0 ? "−" + s : "±0 €";
+};
+const cls = (n) => (n > 0 ? "plus" : n < 0 ? "minus" : "zero");
+
+async function rpc(fn, args) {
+  const headers = { "Content-Type": "application/json", apikey: SUPABASE_KEY };
+  if (SUPABASE_KEY.startsWith("eyJ")) headers.Authorization = "Bearer " + SUPABASE_KEY;
+  const res = await fetch(SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/rpc/" + fn, { method: "POST", headers, body: JSON.stringify(args) });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error((data && (data.message || data.msg || data.error)) || "Fehler " + res.status);
+  return data;
+}
+
+function toast(msg, good) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = "err" + (good ? " ok" : ""); t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 3500);
+}
+
+async function load() {
+  if (busy) return;
+  try {
+    state = user ? await rpc("get_state", { p_name: user.name, p_pin: user.pin }) : null;
+  } catch (e) {
+    if (/PIN falsch/.test(e.message)) { user = null; store.set("user", null); }
+    else toast(e.message);
+  }
+  render();
+}
+
+async function act(fn, args, okMsg) {
+  busy = true;
+  try { await rpc(fn, args); if (okMsg) toast(okMsg, true); }
+  catch (e) { toast(e.message); }
+  finally { busy = false; }
+  await load();
+}
+const asAdmin = (fn, args, ok) => act(fn, { p_pw: adminPw, ...args }, ok);
+
+// ---------- Ansichten ----------
+function render() {
+  const view = $("#view");
+  // Bearbeitete Eingabefelder nicht durch automatisches Neuladen überschreiben
+  if (document.activeElement && view.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+
+  if (SUPABASE_URL.includes("DEIN-PROJEKT")) { $("#nav").hidden = true; view.innerHTML = setupView(); return; }
+  if (!user || !state) { $("#nav").hidden = true; $("#me").innerHTML = ""; view.innerHTML = loginView(); return; }
+
+  $("#me").innerHTML = `${esc(user.name)}<br><a href="#" onclick="logout();return false">abmelden</a>`;
+  const tabs = [["fights", "🥊", "Kämpfe"], ["board", "🏆", "Tabelle"], ["invite", "📱", "Einladen"]];
+  if (adminPw) tabs.push(["admin", "⚙️", "Admin"]);
+  if (!tabs.some((t) => t[0] === tab)) tab = "fights";
+  $("#nav").hidden = false;
+  $("#nav").innerHTML = tabs.map(([k, i, l]) => `<button class="${k === tab ? "on" : ""}" onclick="go('${k}')"><b>${i}</b>${l}</button>`).join("");
+  view.innerHTML = { fights: fightsView, board: boardView, invite: inviteView, admin: adminView }[tab]();
+  if (tab === "invite") drawQr();
+}
+function go(t) { tab = t; store.set("tab", t); render(); window.scrollTo(0, 0); }
+
+function setupView() {
+  return `<div class="card setup"><h2>Noch nicht eingerichtet</h2>
+    <p>Trage oben in der <code>index.html</code> die Werte <code>SUPABASE_URL</code> und <code>SUPABASE_KEY</code> ein. Details stehen in der <code>ANLEITUNG.md</code>.</p></div>`;
+}
+
+function loginView() {
+  return `<div class="card">
+    <h2 style="margin-top:4px">Mitmachen</h2>
+    <p class="hint" style="margin-top:0">Neu? Einfach Name und eine 4-stellige PIN ausdenken. Schon dabei? Gleicher Name, gleiche PIN.</p>
+    <form onsubmit="login(event)">
+      <label>Name</label><input name="name" autocomplete="nickname" maxlength="20" required value="${esc(store.get("lastname") || "")}">
+      <label>PIN (4 Ziffern)</label><input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required type="password">
+      <button class="b gold full">Los geht's</button>
+    </form></div>
+    ${rulesHtml()}`;
+}
+async function login(ev) {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  const name = f.get("name").trim(), pin = f.get("pin");
+  try {
+    const r = await rpc("join_game", { p_name: name, p_pin: pin });
+    user = { name: r.name, pin }; store.set("user", user); store.set("lastname", r.name);
+    document.activeElement?.blur();
+    await load();
+  } catch (e) { toast(e.message); }
+}
+function logout() { user = null; state = null; store.set("user", null); render(); }
+
+function fightsView() {
+  const fights = [...state.fights].reverse(); // Main Event oben
+  if (!fights.length) return `<div class="card">Noch keine Kämpfe eingetragen.</div>`;
+  const open = state.fights.filter((f) => f.status === "open");
+  const missing = open.filter((f) => !f.mine).length;
+  return `<p class="hint">${open.length ? `Tippe, wer gewinnt. Pro Kampf ${STAKE} € Einsatz. Tipps sind änderbar, bis der Kampf beginnt. ${missing ? `<b style="color:var(--gold)">${missing} offene${missing === 1 ? "r Kampf" : " Kämpfe"} ohne Tipp.</b>` : "✅ Alles getippt."}` : "Alle Kämpfe sind gesperrt."}</p>`
+    + fights.map(fightCard).join("");
+}
+
+function fightCard(f) {
+  const chip = { open: `<span class="chip open">● Tipps offen</span>`, locked: `<span class="chip locked">🔒 Kampf läuft</span>`, done: `<span class="chip done">Beendet</span>` }[f.status];
+  const btn = (side, name) => {
+    const c = ["pick"];
+    if (f.mine === side) c.push("sel");
+    if (f.status === "done") { if (f.result === side) c.push("win"); else if (f.result !== "draw") c.push("dim"); }
+    const click = f.status === "open" ? `onclick="bet(${f.id},'${side}')"` : "disabled";
+    return `<button class="${c.join(" ")}" ${click}>${esc(name)}${f.status === "done" && f.result === side ? "<br><small style='color:inherit'>🏆 Sieger</small>" : ""}</button>`;
+  };
+  let foot = "";
+  if (f.status === "open") {
+    foot = `<div class="hint">${f.count} ${f.count === 1 ? "Tipp" : "Tipps"} abgegeben · Wer was getippt hat, siehst du ab Kampfbeginn.${f.mine ? ` <a href="#" style="color:var(--muted)" onclick="bet(${f.id},null);return false">Tipp löschen</a>` : ""}</div>`;
+  } else {
+    const side = (s) => f.bets.filter((b) => b.pick === s)
+      .map((b) => `<div class="n"><span>${esc(b.name)}</span>${f.status === "done" ? `<span class="${cls(b.net)}">${euro(b.net)}</span>` : ""}</div>`).join("") || `<small>niemand</small>`;
+    const me = f.bets.find((b) => b.name === user.name);
+    let line = !f.mine ? "Du hast hier nicht getippt." : "";
+    if (f.status === "done" && me) line = `Dein Ergebnis: <b class="${cls(me.net)}">${euro(me.net)}</b>`;
+    if (f.status === "done" && f.result === "draw") line = "Unentschieden / No Contest: alle bekommen ihren Einsatz zurück.";
+    foot = `<div class="sides"><div>${side("A")}</div><div>${side("B")}</div></div>${line ? `<div class="hint">${line}</div>` : ""}`;
+  }
+  let adm = "";
+  if (adminPw) {
+    const a = esc(f.a.split(" ").pop()), b = esc(f.b.split(" ").pop());
+    adm = `<div class="admin">` + (
+      f.status === "open" ? `<button class="b gold" onclick="setStatus(${f.id},'locked')">🔒 Kampf beginnt – sperren</button>`
+      : f.status === "locked" ? `<button class="b" onclick="setResult(${f.id},'A')">${a} gewinnt</button><button class="b" onclick="setResult(${f.id},'B')">${b} gewinnt</button><button class="b" onclick="setResult(${f.id},'draw')">Unentsch./NC</button><button class="b red" onclick="setStatus(${f.id},'open')">wieder öffnen</button>`
+      : `<button class="b red" onclick="setResult(${f.id},null)">Ergebnis zurücknehmen</button>`) + `</div>`;
+  }
+  return `<div class="card"><div class="meta"><span>${esc(f.info || "Kampf " + f.pos)}</span>${chip}</div>
+    <div class="vs">${btn("A", f.a)}<span class="x">VS</span>${btn("B", f.b)}</div>${foot}${adm}</div>`;
+}
+
+function bet(id, pick) {
+  const f = state.fights.find((x) => x.id === id);
+  if (f.mine === pick) return;
+  f.mine = pick; render(); // sofort anzeigen
+  act("place_bet", { p_name: user.name, p_pin: user.pin, p_fight: id, p_pick: pick });
+}
+function setStatus(id, s) {
+  if (s === "open" && !confirm("Kampf wieder für Tipps öffnen?")) return;
+  asAdmin("admin_set_status", { p_id: id, p_status: s });
+}
+function setResult(id, r) {
+  const f = state.fights.find((x) => x.id === id);
+  const txt = r === "A" ? f.a + " gewinnt" : r === "B" ? f.b + " gewinnt" : r === "draw" ? "Unentschieden / No Contest" : "Ergebnis zurücknehmen";
+  if (confirm(txt + "?")) asAdmin("admin_set_result", { p_id: id, p_result: r });
+}
+
+function rulesHtml() {
+  return `<div class="card"><b>So funktioniert's</b><ul class="rules">
+    <li>Pro Kampf tippst du auf einen Sieger, Einsatz ${STAKE} €. Du musst nicht jeden Kampf tippen.</li>
+    <li>Bis zum Kampfbeginn kannst du deinen Tipp ändern. Dann wird er gesperrt.</li>
+    <li>Was die anderen getippt haben, siehst du erst ab Kampfbeginn.</li>
+    <li>Die Einsätze der Verlierer werden gleichmäßig unter den Gewinnern aufgeteilt.</li>
+    <li>Haben alle richtig oder alle falsch getippt, oder endet der Kampf unentschieden / No Contest, gibt es für niemanden Plus oder Minus.</li>
+    <li>Am Ende zeigt die Tabelle, wer im Plus und wer im Minus ist.</li></ul></div>`;
+}
+
+function boardView() {
+  const done = state.fights.filter((f) => f.status === "done").length;
+  const rows = state.board.map((p, i) => `<tr><td>${i + 1}.</td><td>${p.name === user.name ? "<b>" + esc(p.name) + "</b>" : esc(p.name)}</td>
+    <td class="num"><small>${p.won}✓ ${p.lost}✗</small></td><td class="num big ${cls(p.net)}">${euro(p.net)}</td></tr>`).join("");
+  return `<h2>Tabelle <small>(${done} von ${state.fights.length} Kämpfen entschieden)</small></h2>
+    <div class="card" style="padding:4px 12px"><table><tr><th></th><th>Name</th><th class="num">Tipps</th><th class="num">Bilanz</th></tr>${rows}</table></div>
+    <p class="hint">Am Ende zahlt, wer im Minus ist, und wer im Plus ist, bekommt. Die Summe aller Bilanzen ist immer 0 €.</p>
+    ${rulesHtml()}`;
+}
+
+const appUrl = () => location.origin + location.pathname;
+function inviteView() {
+  return `<div class="center"><h2>Freunde einladen</h2><p class="hint">QR-Code scannen lassen, Name + PIN wählen, fertig.</p>
+    <div id="qr"></div><p style="word-break:break-all"><small>${esc(appUrl())}</small></p>
+    <button class="b" onclick="navigator.clipboard.writeText(appUrl()).then(()=>toast('Link kopiert',true))">Link kopieren</button></div>`;
+}
+function drawQr() {
+  if (!window.QRCode) { $("#qr").textContent = "QR-Code konnte nicht geladen werden."; return; }
+  new QRCode($("#qr"), { text: appUrl(), width: 480, height: 480, correctLevel: QRCode.CorrectLevel.M });
+}
+
+function adminView() {
+  const fights = state.fights.map((f) => `<form class="row" onsubmit="saveFight(event,${f.id})">
+      <input name="pos" type="number" value="${f.pos}" title="Reihenfolge (1 = erster Kampf)">
+      <input name="a" value="${esc(f.a)}" required><input name="b" value="${esc(f.b)}" required>
+      <input name="info" value="${esc(f.info)}" placeholder="Info (z. B. Main Event)" style="grid-column:1/3">
+      <div style="display:flex;gap:6px"><button class="b gold">Speichern</button><button class="b red" type="button" onclick="delFight(${f.id})">✕</button></div>
+    </form>`).join('<div style="height:8px"></div>');
+  const players = state.board.map((p) => `<tr><td>${esc(p.name)}</td><td class="num"><button class="b red" onclick="delPlayer('${esc(p.name).replace(/'/g, "\\'")}')">entfernen</button></td></tr>`).join("");
+  return `<h2>Admin</h2>
+    <p class="hint">Kämpfe sperren und Sieger eintragen geht direkt im Tab „Kämpfe“ auf jeder Karte.</p>
+    <div class="card"><b>Kämpfe bearbeiten</b><p class="hint" style="margin-top:4px">Nr. = Reihenfolge (1 = erster Kampf des Abends, höchste Nr. = Main Event)</p>${fights}</div>
+    <div class="card"><b>Neuer Kampf</b>
+      <form class="row" style="margin-top:10px" onsubmit="saveFight(event,null)">
+        <input name="pos" type="number" placeholder="Nr."><input name="a" placeholder="Kämpfer A" required><input name="b" placeholder="Kämpfer B" required>
+        <input name="info" placeholder="Info (optional)" style="grid-column:1/3"><button class="b gold">Hinzufügen</button>
+      </form></div>
+    <div class="card"><b>Mitspieler (${state.board.length})</b><table>${players}</table>
+      <div style="margin-top:12px"><button class="b" onclick="asAdmin('admin_set_registration',{p_closed:${!state.registration_closed}})">${state.registration_closed ? "Anmeldung wieder öffnen" : "Anmeldung schließen"}</button></div></div>
+    <button class="b full" onclick="adminLogout()">Admin abmelden</button>`;
+}
+function saveFight(ev, id) {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  document.activeElement?.blur();
+  asAdmin("admin_save_fight", { p_id: id, p_pos: f.get("pos") ? Number(f.get("pos")) : null, p_a: f.get("a"), p_b: f.get("b"), p_info: f.get("info") }, "Gespeichert");
+}
+function delFight(id) { if (confirm("Kampf inkl. aller Tipps löschen?")) asAdmin("admin_delete_fight", { p_id: id }, "Gelöscht"); }
+function delPlayer(name) { if (confirm(name + " inkl. aller Tipps entfernen?")) asAdmin("admin_delete_player", { p_name: name }, "Entfernt"); }
+
+async function adminLogin() {
+  const pw = prompt("Admin-Passwort");
+  if (!pw) return;
+  try { await rpc("admin_state", { p_pw: pw }); adminPw = pw; store.set("admin", pw); tab = "admin"; render(); toast("Admin-Modus aktiv", true); }
+  catch (e) { toast(e.message); }
+}
+function adminLogout() { adminPw = null; store.set("admin", null); go("fights"); }
+
+// Admin-Modus über ...index.html#admin
+if (location.hash === "#admin") { history.replaceState(null, "", location.pathname + location.search); setTimeout(adminLogin, 300); }
+
+load();
+setInterval(() => { if (!document.hidden) load(); }, 8000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
