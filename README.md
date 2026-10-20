@@ -38,11 +38,11 @@ const SUPABASE_KEY = "eyJ...";   // anon- oder publishable-Key
 ## 4. Am Abend (kein Admin nötig)
 
 - **Freunde einladen:** In der App den Tab **Einladen** öffnen. Dort ist der QR-Code. Jeder wählt Name und eine 4-stellige PIN. Mit derselben Kombi kommt man auch von einem anderen Handy wieder rein.
-- **Kampf beginnt:** Irgendwer drückt auf der Karte **"Kampf beginnt – Tipps sperren"**. Ab dann sind die Tipps fix. Wer wen getippt hat, sehen alle erst, wenn der Kampf vorbei und das Ergebnis bestätigt ist. Zu früh gedrückt? In den ersten 2 Minuten nach dem Sperren können 2 verschiedene Mitspieler die Sperre gemeinsam aufheben. Danach ist die Sperre endgültig. Weder die App noch jemand mit dem öffentlichen Schlüssel kann den Kampf dann wieder öffnen oder Tipps ändern, das verhindert die Datenbank selbst.
+- **Kampf beginnt:** Irgendwer drückt auf der Karte **"Kampf beginnt – Tipps sperren"**. Ab dann sind die Tipps fix. Wer wen getippt hat, sehen alle erst, wenn der Kampf vorbei und das Ergebnis bestätigt ist. Die Sperre ist sofort endgültig, also erst drücken, wenn der Kampf wirklich losgeht. Weder die App noch jemand mit dem öffentlichen Schlüssel kann den Kampf dann wieder öffnen oder Tipps ändern, das verhindert die Datenbank selbst.
 - **Kampf vorbei:** Jeder kann den Sieger bestätigen (oder **Unentschieden/NC**). Das Ergebnis gilt, sobald mehr als die Hälfte der Tipper dieses Kampfes dasselbe bestätigt hat. Bei 5 Tippern braucht es also 3 gleiche Stimmen. Die eigene Stimme lässt sich ändern. Wurde versehentlich falsch bestätigt, korrigiert die Mehrheit das.
 - **Fight Card geändert?** Unten in der Liste unter "Kampf fehlt? Hinzufügen" einen Kampf ergänzen. Ein Kampf ohne Tipps lässt sich wieder entfernen.
 - **Protokoll:** Jede Aktion (Tipp, Änderung, Sperren, Entsperren, Ergebnis) wird mit Uhrzeit gespeichert und kann nicht geändert werden. Sobald ein Kampf entschieden ist, sieht jeder das Protokoll auf der Kampfkarte.
-- **Verdeckt-Zeit anpassen:** `update settings set value = '180' where key = 'grace_seconds';` (Sekunden).
+- **Entsperren erlauben (optional):** `update settings set value = '120' where key = 'grace_seconds';` Dann können 2 Mitspieler eine Sperre in den ersten 120 Sekunden gemeinsam aufheben. Standard ist 0 (Sperre sofort endgültig).
 - **Mehrheit anpassen:** In Supabase im SQL Editor z. B. `update settings set value = '0.66' where key = 'quorum';` ausführen. Dann braucht es mehr als zwei Drittel.
 
 ## Regeln (so rechnet die App)

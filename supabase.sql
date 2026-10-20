@@ -2,8 +2,7 @@
 -- Oktagon Tippspiel – Datenbank für Supabase
 -- Einmal komplett im Supabase "SQL Editor" ausführen. Kein Admin nötig:
 --  * Jeder Mitspieler kann einen Kampf sperren, sobald er beginnt.
---    In den ersten 2 Minuten danach können 2 Mitspieler die Sperre gemeinsam
---    aufheben (falls zu früh gesperrt). Danach ist die Sperre endgültig.
+--    Die Sperre ist sofort endgültig.
 --  * Die Tipps der anderen bleiben verdeckt, bis das Ergebnis bestätigt ist.
 --  * Jede Aktion (Tipp, Änderung, Sperren, Entsperren, Ergebnis) wird protokolliert.
 --    Das Protokoll eines Kampfes sehen alle, sobald der Kampf entschieden ist.
@@ -148,7 +147,7 @@ revoke all on _payouts from anon, authenticated;
 create or replace function _undo_left(p_fight int) returns int
 language sql stable security definer set search_path = public, extensions as $$
   select case when status = 'locked' and locked_at is not null
-              then greatest(0, ceil(coalesce((select value::int from settings where key = 'grace_seconds'), 120) - extract(epoch from now() - locked_at)))::int else 0 end
+              then greatest(0, ceil(coalesce((select value::int from settings where key = 'grace_seconds'), 0) - extract(epoch from now() - locked_at)))::int else 0 end
     from fights where id = p_fight
 $$;
 
@@ -254,7 +253,7 @@ begin
   end if;
 end $$;
 
--- Zu früh gesperrt? In den ersten 2 Minuten nach dem Sperren können 2 verschiedene Mitspieler
+-- Nur aktiv, wenn grace_seconds > 0 (Standard 0 = Sperre sofort endgültig). Dann können 2 verschiedene Mitspieler
 -- die Sperre gemeinsam aufheben. Danach gibt es KEINE Möglichkeit mehr, den Kampf zu öffnen.
 -- p_withdraw = true zieht den eigenen Antrag zurück. Gibt true zurück, wenn entsperrt wurde.
 create or replace function unlock_fight(p_name text, p_pin text, p_fight int, p_withdraw boolean default false) returns boolean
@@ -340,8 +339,8 @@ grant execute on function join_game(text, text), get_state(text, text), place_be
 -- 4. Mehrheit für Ergebnisse: 0.5 = mehr als die Hälfte der Tipper
 -- ---------------------------------------------------------------------
 insert into settings (key, value) values ('quorum', '0.5') on conflict (key) do nothing;
--- Sekunden nach dem Sperren, in denen noch entsperrt werden kann
-insert into settings (key, value) values ('grace_seconds', '120') on conflict (key) do nothing;
+-- Sekunden nach dem Sperren, in denen 2 Mitspieler noch entsperren können (0 = Sperre sofort endgültig)
+insert into settings (key, value) values ('grace_seconds', '0') on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------
 -- 5. Fight Card OKTAGON 96, 31.10.2026, SAP Garden München
