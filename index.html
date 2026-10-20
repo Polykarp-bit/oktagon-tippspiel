@@ -88,6 +88,7 @@
 
 <script>
 const STAKE = 10;
+const APP_VERSION = "2026-10-20.2"; // bei jeder Änderung hochzählen: offene Seiten laden sich dann selbst neu
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem("okt_" + k)); } catch { return null; } },
   set(k, v) { try { v == null ? localStorage.removeItem("okt_" + k) : localStorage.setItem("okt_" + k, JSON.stringify(v)); } catch {} },
@@ -377,6 +378,15 @@ setInterval(() => {
   if (g.some((f) => f.undo_until <= Date.now())) { g.forEach((f) => (f.undo_until = 0)); load(); } else render();
 }, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+// Neue Version veröffentlicht? Dann automatisch neu laden (am Browser-Cache vorbei)
+async function checkVersion() {
+  try {
+    const html = await (await fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" })).text();
+    const v = (html.match(/const APP_VERSION = "([^"]+)"/) || [])[1];
+    if (v && v !== APP_VERSION && !(document.activeElement && document.activeElement.tagName === "INPUT")) location.reload();
+  } catch {}
+}
+setInterval(() => { if (!document.hidden) checkVersion(); }, 60000);
 </script>
 </body>
 </html>
